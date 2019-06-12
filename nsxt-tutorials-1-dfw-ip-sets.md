@@ -1,7 +1,7 @@
 # NSX-T Security with Ansible - Pt1. Basic Firewall Rules
 
 ## Disclaimer
-This article is my opinion and not that of my employed.
+This article is my opinion and not that of my employer.
 
 # Background
 NSX-T is VMware's next gen software defined network stack. Whilst there is a GUI, if your using it to drive the firewall you're doing it all wrong. This article will present how to use Ansible to drive the NSX-T firewall using GitOps workflows.
@@ -27,7 +27,7 @@ If you want to dig into the NSX-T architecture beyond firewalling, the VMware Va
 https://docs.vmware.com/en/VMware-Validated-Design/5.0.1/vmware-validated-design-501-sddc-nsxt-workload-architecture-design.pdf
 
 ## Distributed Firewall (DFW) and Micro Segmentation 
-Distrubuted firewalling is one of the best feature of software defined networking IMHO. In legacy networking if you wanted to separate 2 workloads you would need to put them on separate subnets/VLANs and then have a firewall running between the VLANs. This approach does not scale for a number of reasons, primarily because you can have a maximum of 4094 VLANs configured on your network swtiches, plus you have a huge amount of configuration overhead to give you layer 3 separation. In the virtualized and containerized worlds, it is possible to enforce firewall policy at the VM or container level. For example with VMs, the NSX-T software is run within the Hypervisor of the virtual switch that VMs connect to and it is this software within the virtual switch which can enforce firewall policy. By enforcing policy at the point traffic enters an overlay network it is possible to build out zero trust and micro segmented architectures, where every object can only have the absolute minimum of rules, even blocking traffic on objects in the same subnet that run on the same host.
+Distributed firewalling is one of the best feature of software defined networking IMHO. In legacy networking if you wanted to separate 2 workloads you would need to put them on separate subnets/VLANs and then have a firewall running between the VLANs. This approach does not scale for a number of reasons, primarily because you can have a maximum of 4094 VLANs configured on your network switches, plus you have a huge amount of configuration overhead to give you layer 3 separation. In the virtualized and containerized worlds, it is possible to enforce firewall policy at the VM or container level. For example with VMs, the NSX-T software is run within the Hypervisor of the virtual switch that VMs connect to and it is this software within the virtual switch which can enforce firewall policy. By enforcing policy at the point traffic enters an overlay network it is possible to build out zero trust and micro segmented architectures, where every object can only have the absolute minimum of rules, even blocking traffic on objects in the same subnet that run on the same host.
 
 ## IP Sets
 As the name may suggest IP Sets are sets of IP addresses.  You can define individual IPs, ranges or CIDR style based subnets, up to a maximum of 4000 per IP set.
@@ -44,15 +44,22 @@ The modules you'll be using in a Git repo which is a fork of the official VMware
 - (Optional) A good editor with YAML linting. VSCode is quite nice and has good YAML extensions and the Remote SSH extension lets you remotely edit file on your Ansible control host from a non-Linux system.
 - (Optional) A git repository to host your firewall rule YAML
 
-On you Ansible Control server run git clone https://github.com/laidbackware/ansible-for-nsxt/
+On you Ansible Control server from a suitable directory run:
+git clone https://github.com/laidbackware/ansible-for-nsxt/
+This will create the 'ansible-for-nsxt' sub-folder. Then from the current folder make a new folder called config.
+mkdir config
+Now the module and the configuration will be separate, meaning that the configuration can be committed to git separately. Your folders should be structured as below:
+/
+- ansible-for-nsxt/
+- config/
+From this point onwards we will be working from the config directory.
 
 # Example Ruleset Answers
-In this example we'll put in some a default rule for everything within the DNS Domain to connect to a DNS server. The YAML for each section needs to be added to a file called answers_demo.yml, which we'll be using later.
-
-All file listed below should be saved in the root of the ansbile-for-nsxt folder where you've cloned the repo.
+In this example we'll put in a rule to allow everything within the NSX domain to connect to Google DNS.
+The part1_answers.yml file shown below should be saved in the config directory you have just created.
 
 ## IP Set
-In this example we're making up an IP Set to represent the destination in our firewall rule for an imaginary Apt repo.
+In this example we're setting the Google DNS servers as an IP set, so that every source will have access to DNS.
 
 ```
 nsxt_ip_sets:
@@ -65,7 +72,8 @@ nsxt_ip_sets:
 
 
 ## Firewall rule section
-As we want to enforce firewall policy on virtual machines controlled by NSX-T we want to insert a distributed firewall rule. Luckily this is the default type of rule and we will let the rule apply everywhere. To ensure that only TLS/SSL is used over this rule we're going to add the context aware section.
+As we want to enabled this policy on objects controlled by NSX-T we want to insert a distributed firewall rule. Luckily this is the default type of rule and we will let the rule apply everywhere. If there is a requirement to limit the scope of the rule, the applied_tos section can be used to apply the rule to certain logical ports. Scope and applied_tos will be covered in future tutorials.
+In this example the source field has been omitted, which means that the source will be set to any. Destination will be the new IP set and it will be an IPv4 rule. The service is set to DNS, which is one of the built in NSX service types.
 
 ```
 nsxt_firewall_section:
@@ -101,7 +109,7 @@ password: "FluffyBunn135"
 validate_certs: False`
 
 # Playbook
-To apply this change requires a fairly simple Ansible playbook, as all the tasks are independant. By setting the values from our secrets file as vars before we declare tasks it means that we do no have to declare the params withing each task. The text below should be saved as demo_play.yml.
+To apply this change requires a fairly simple Ansible playbook, as all the tasks are independent. As with the answers this should be saved in config folder. Notice that the answers files are defined, these will be passed in at run-time.
 
 ---
 - hosts: 127.0.0.1
@@ -132,13 +140,20 @@ To apply this change requires a fairly simple Ansible playbook, as all the tasks
       with_items:
         - "{{ nsxt_dfw_section_with_rules }}"
 
-# Running the play
+# Running the Playbook
+To import the modules from the ansible-for-nsxt folder, 2 environmental variables will needed to point to the library and module_utils folders.
+'''
+export ANSIBLE_LIBRARY="../ansible-for-nsxt";
+export ANSIBLE_MODULE_UTILS="../ansible-for-nsxt/module_utils";
+'''
+When running the playbook, extra-vars is used to pass in the answers yaml files, with the @ telling Ansible to open a file.
+'''
+ansible-playbook firewall_ipsets.yml --extra-vars=@manager.yml --extra-vars=@part1_answers.yml -vvv;
+'''
+All goes well an output similar to below should be displayed.
 
-
-
-
-
-
+# Next Time
+The next article in this series will cover NS Groups and how to make groups based on dynamic criteria, such as operating system type.
 
 
 
