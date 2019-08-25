@@ -2,7 +2,7 @@
 title: NSX-T Security with Ansible - Pt2. NS Groups
 tags: ['nsx-t']
 ---
-## How to use 
+## How to create dynamic groups of Objects in NSX-T with Ansible
 
 ## Disclaimer
 This article is my opinion and not that of my employer.
@@ -19,6 +19,8 @@ A Namespace (NS) Group can either be defined to include other objects such as IP
 # Example Ruleset Answers
 In this example we'll put in a default rule for all Ubuntu VMs to connect to an external Apt repo on the alternate HTTPS port. The answers should be saved in a file called ###.yml in your configs folder.
 
+Continuing the pattern for [Part 1](https://medium.com/swlh/nsx-t-security-with-ansible-pt1-basic-firewall-rules-6aa08c25e226), files will be created in the configs folder which shared the same parent folder as the ansible-for-nsxt modules.
+
 ## Service
 NSX-T contains a number of default service definitions, which are used to map TCP or UDP ports to names. In this example we want to map port 8443 to a service called HTTPS-Alt. The 3 dashes at the top signify this is a YAML file, are not mandatory for Ansible, but are good practice.
 
@@ -34,7 +36,7 @@ nsxt_services:
   state: present
 ```
 
-## IP Set
+## IP Sets
 In this example let's assume that we have 2 different targets which all Ubuntu Servers will need to connect to.
 
 ```
@@ -105,22 +107,31 @@ nsxt_firewall_section:
 ```
 
 ## Bringing it all together 
-Will result in the following answer file.
+Combining the yaml in the section will result in the following answer file, which should be saved as a file called part2_answers.yml in your config folder.
 
 https://gist.github.com/laidbackware/7ad9bc51b5f6540235dc3425eec01c33
 
-###
 # Playbook
-Now we just need a simple playbook to execute the tasks.
+Now we just need a simple playbook to create the firewall section, which involves executing 4 tasks against the answers created in the last section. The playbook should be saved as part2_playbook.yml
 
 https://gist.github.com/laidbackware/3b773b263d746d7c597ebae8012a0982
 
 # Running the playbook
+To import the modules from the ansible-for-nsxt folder, 2 environmental variables will needed to point to the library and module_utils folders.
+'''
+export ANSIBLE_LIBRARY="../ansible-for-nsxt";
+export ANSIBLE_MODULE_UTILS="../ansible-for-nsxt/module_utils";
+'''
+When running the playbook, extra-vars is used to pass in the answers yaml files, with the @ telling Ansible to open a file. Note that manager.yml is needed form part 1.
+'''
+ansible-playbook part2_playbook.yml --extra-vars=@manager.yml --extra-vars=@part2_answers.yml -vvv;
+'''
+All goes well an output similar to below should be displayed.
 
 # Checking the output
 Now if you browse the GUI, under Inventory > Groups and select the ubuntu_vms groups, you should see that your groups has some members. It's worth noting that the OS type will only get set if the VM is booted with VM Tools installed.
 
-#<insert pic>
+![cat](https://catpics.com/some_cat.png)
 
 Now click the members tab, change the drop down to 'Virtual Machines' and select the 'Effective Members' radio button. 
 
